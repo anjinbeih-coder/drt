@@ -1,0 +1,8 @@
+.idea
+venv/
+Experiments/Parcelpoint_py/
+__pycache__/
+.claude/
+Environments/OOH/yanjiao_instance/
+Environments/OOH/yanjiao/cache/
+Environments/OOH/yanjiao/matrix_*

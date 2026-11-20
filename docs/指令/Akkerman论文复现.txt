@@ -1,0 +1,180 @@
+请你现在调用gsd new project来构建一个论文复现流程。
+你现在在仓库中工作。请严格基于当前代码库完成一个“RC 数据集上复现 Akkerman DSPO 论文 synthetic RC 实验，但完全删除上门配送失败成本”的实验流程。 
+
+
+
+目标不是开发新的 方法，而是尽量回到 Akkerman 原始 DSPO 代码逻辑，并做一个可复现的 no-home-failure-cost 版本。
+
+
+
+请遵守以下约束：
+
+
+
+1. 只改动与本实验相关的代码，主要范围限制在：
+
+   - ooh_code/Src/parser.py
+
+   - ooh_code/Src/config.py
+
+   - ooh_code/Src/Utils/Utils.py
+
+   - ooh_code/run.py
+
+   - ooh_code/run_ppo.py
+
+   - ooh_code/Src/Algorithms/Baseline.py
+
+   - ooh_code/Src/Algorithms/Heuristic.py
+
+   - ooh_code/Src/Algorithms/DSPO.py
+
+   - ooh_code/Src/Algorithms/PPO.py
+
+   - ooh_code/scripts/ 下新增实验 runner / analyzer
+
+   - ooh_code/tests/ 下新增最小测试
+
+
+
+2. 不要修改 manuscript、revision_notes、figures、related_work 里的论文文本或历史结果文件。
+
+
+
+3. 实验目标：
+
+   - instance = RC
+
+   - 复现 Akkerman synthetic RC setting
+
+   - 删除所有 home delivery failure cost
+
+   - 不允许 customer exit / outside option / walk-away
+
+   - 保留 OOH customer choice、pricing、routing、service cost、discount cost、charge revenue
+
+   - 输出 Table-2-style 结果表
+
+
+
+4. 必须做到“真正删除 failure cost”，不是只在最终表格中把 failure cost 减掉：
+
+   - training reward/cost 中不包含 failure cost
+
+   - PPO terminal reward 中不包含 failure cost
+
+   - run.py eval2 输出的 failure costs 必须为 0
+
+   - total costs 不包含 failure cost
+
+   - summary CSV/JSON 不包含 failure cost，或 failure_costs_mean 恒为 0
+
+   - net_profit / operating_costs 若存在，也不能扣除 failure cost
+
+
+
+5. 对 current code 做兼容性处理：
+
+   - 当前 parser 的 algo choices 可能没有 Heuristic/PPO，请审计并修复，使 Hindsight/Foresight/PPO 可以通过 CLI 跑起来。
+
+   - 当前 parser 的 outside_option_util 是 float，无法直接传 None；请增加 parse_optional_float 或等价逻辑，使 CLI 可以传 --outside_option_util None，并在 Akkerman RC no-failure 实验中禁用 outside option。
+
+   - 复现 Akkerman 时不要启用 DRPO、SPO、MenuSelection、outside option、quit threshold、travel-time utility、Yanjiao/DRT 扩展。
+
+   - 保留当前 DRPO 相关代码，不要破坏现有功能。
+
+
+
+6. 实验算法至少包括：
+
+   - NoOOH
+
+   - OnlyOOH
+
+   - NoPricing
+
+   - StaticPricing
+
+
+
+   - DSPO
+
+
+
+7. 如果当前代码无法完全 hard-disable OOH/home choice，则可以先用价格近似 Only-home / Only-OOH，但必须在日志和结果表中验证：
+
+   - NoOOH 的 percentage home delivery ≈ 100%
+
+   - OnlyOOH 的 percentage home delivery ≈ 0%
+
+   如果做不到，请实现显式的 exact baseline 模式，而不是只靠极端价格。
+
+
+
+8. 复现脚本要求：
+
+   - 新增 scripts/run_akkerman_rc_no_failure.py
+
+   - 支持 --dry_run
+
+   - 支持 --smoke
+
+   - 支持 --analyze
+
+   - 支持 --seeds 参数
+
+   - 默认 30 seeds
+
+   - 每个算法输出独立日志
+
+   - 最终保存 raw CSV、summary CSV、summary JSON
+
+   - 表格列至少包括：
+
+     strategy, n_runs, home_delivery_mean, travel_costs_mean,
+
+     service_costs_mean, failure_costs_mean, discount_costs_mean,
+
+     charge_revenue_mean, avg_discount_mean, avg_charge_mean,
+
+     total_costs_mean, total_costs_ci95, savings_vs_noooh_mean
+
+
+
+9. 重要实验参数：
+
+   - instance RC
+
+   - max_steps_r = 90
+
+   - max_steps_p = 0.5
+
+   - revenue = 50
+
+   - driver_wage = 30
+
+   - truck_speed = 30
+
+   - max_price = 2
+
+   - min_price = -10
+
+   - home_failure = 0
+
+   - failure_cost = 0
+
+   - outside_option_util = None
+
+   - quit_threshold = None
+
+   - pricing = True
+
+   - load_data = True
+
+   - data_seed = 0
+
+   - data_seed_test = 1
+
+
+
+10. 请先做一次审计报告，然后再修改代码。不要一次性大改。

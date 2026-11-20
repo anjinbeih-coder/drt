@@ -1,0 +1,256 @@
+下面是你可以直接复制给 **Codex Goal Mode（或类似 agent / SWE / coding assistant）**使用的完整项目提示词，已经帮你整理成“可执行实验型优化任务”，重点是：**在不改变场景的前提下，通过结构/参数改进，让 DSPO_PLUS 的净利润稳定超过 DSPO**。
+
+---
+
+# 🧠 Codex Goal Mode 项目提示词（DSPO_PLUS 优化）
+
+## 🎯 项目目标（Goal）
+
+你正在优化一个用于**多用户选择 + 定价 + 服务调度（DRT/meeting point pricing）**的算法框架。
+
+当前有两个核心方法：
+
+* **DSPO（baseline）**
+* **DSPO_PLUS（改进方法）**
+
+### 🏁 目标：
+
+在**完全相同的仿真环境、数据集（RC / Yanjiao / train-test split一致）**下：
+
+> 使 DSPO_PLUS 在最终指标上稳定满足：
+
+* **Net Profit(DSPO_PLUS) > Net Profit(DSPO)**（核心目标）
+* 同时不破坏基本可行性约束：
+
+  * opt-out rate 不显著恶化
+  * service level（home rate / served rate）保持合理区间
+  * 解必须稳定（多seed一致）
+
+---
+
+## 🧩 当前问题背景
+
+DSPO_PLUS 当前优势不稳定，可能原因包括：
+
+* pricing exploration 不充分
+* meeting point choice bias 不合理
+* SPO / DSPO loss 权重不合适
+* service cost modeling 不够精细
+* passenger choice model（MNL utility）对价格/时间敏感性未校准
+* routing cost signal 在 learning 中权重不足
+
+---
+
+## 🛠️ 允许你修改的范围
+
+你可以对 DSPO_PLUS 做以下类型优化：
+
+### 1️⃣ 结构级改动（允许）
+
+* 修改 DSPO_PLUS 的 objective function：
+
+  * profit term weight
+  * SPO loss weight α
+  * service penalty（opt-out / walking / waiting）
+* 修改 learning signal：
+
+  * cost prediction loss vs decision loss 权重
+* 修改 menu / meeting point scoring function
+* 修改 sampling / exploration strategy
+
+---
+
+### 2️⃣ 参数级优化（必须做）
+
+自动搜索或手动设计：
+
+* β_price（价格敏感度）
+* β_ivt（出行时间敏感度）
+* β_walk（步行惩罚）
+* α（SPO / DSPO 权重）
+* vehicle number
+* capacity
+* static price baseline（对照控制变量）
+* pricing scaling factor
+
+---
+
+### 3️⃣ 机制级增强（重点方向）
+
+你可以尝试以下增强方向：
+
+#### (A) Profit-aware DSPO_PLUS
+
+引入 explicit profit shaping：
+
+* reward = revenue - cost - penalty(opt-out)
+* 强化 profit gradient
+
+#### (B) Cost-aware routing correction
+
+增强 routing cost 在 learning 中权重：
+
+* marginal cost label weight ↑
+* remove bias from cheap infeasible routes
+
+#### (C) Choice-aware calibration layer
+
+对 MNL utility 做 recalibration：
+
+* price sensitivity correction
+* walking penalty nonlinearization
+* threshold-based opt-out smoothing
+
+#### (D) Stability regularization
+
+加入：
+
+* seed consistency loss
+* variance penalty across instances
+
+---
+
+## 📊 实验设计要求
+
+你必须严格遵守以下实验协议：
+
+### Step 1：Baseline validation
+
+运行：
+
+* No Pricing
+* Static Pricing
+* DSPO
+* DSPO_PLUS
+
+确认：
+
+* metric pipeline 正常
+* no NaN / no collapse
+* profit scale 合理
+
+---
+
+### Step 2：DSPO vs DSPO_PLUS 对比
+
+固定同一组 seed：
+
+输出：
+
+* net_profit
+* opt-out rate
+* served rate
+* home rate
+* revenue / cost breakdown
+
+---
+
+### Step 3：优化循环（核心）
+
+进行 iterative loop：
+
+```
+repeat until convergence:
+    propose modification (structure or parameter)
+    run RC train
+    evaluate DSPO_PLUS vs DSPO
+    if profit not improved:
+        rollback or adjust
+```
+
+---
+
+## 🧪 成功判定标准（必须全部满足）
+
+DSPO_PLUS 被认为“成功改进”需满足：
+
+### 必须条件（hard constraints）
+
+* Net Profit(DSPO_PLUS) > Net Profit(DSPO)（在 ≥ 70% seeds 上成立）
+* 无严重服务崩溃：
+
+  * opt-out rate 不爆炸
+  * served rate ≥ DSPO 的 90%
+
+### 次级条件（soft constraints）
+
+* variance across seeds ↓
+* profit improvement ≥ +2%（建议目标）
+
+---
+
+## 📦 输出要求
+
+每次实验必须输出：
+
+### 1️⃣ 对比表
+
+* DSPO vs DSPO_PLUS
+
+### 2️⃣ breakdown
+
+* revenue
+* cost
+* penalty
+* opt-out
+
+### 3️⃣ 结构/参数变化记录
+
+明确写出：
+
+* 修改了什么
+* 为什么可能有效
+* 是否提升 profit
+
+### 4️⃣ 结论判断
+
+必须回答：
+
+> “当前 DSPO_PLUS 是否已经优于 DSPO？如果没有，主要瓶颈是什么？”
+
+---
+
+## 🔁 强制迭代规则（Goal Mode 核心）
+
+你必须遵守：
+
+* ❌ 如果 DSPO_PLUS ≤ DSPO → 不允许进入下一阶段
+* ✔ 必须持续修改结构或参数直到满足目标
+* ✔ 每次修改必须基于实验结果，而不是猜测
+
+---
+
+## 🧠 优化优先级建议
+
+按以下顺序尝试：
+
+1. β_price / β_ivt 校准
+2. profit objective reweight
+3. SPO loss α 调整
+4. routing cost signal 强化
+5. menu scoring function redesign
+6. stability regularization
+
+---
+
+## 🚨 重要约束
+
+* 不允许改变数据集或场景
+* 不允许“人为调结果”
+* 所有改动必须可复现
+* 所有对比必须同 seed
+
+---
+
+## 🏁 最终目标
+
+你最终要得到一个稳定结论：
+
+> “DSPO_PLUS 在经过结构/参数优化后，在 RC 数据集上显著优于 DSPO，并且提升来源是机制改进，而非调参偶然性。”
+
+---
+
+如果你需要，我可以再帮你做一个更狠版本：
+
+👉 “reviewer attack-resistant version（专门防审稿人质疑用）”
+👉 或者 “GS D + Codex 联动自动搜索版本（全自动实验循环）”

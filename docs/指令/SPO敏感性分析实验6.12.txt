@@ -1,0 +1,284 @@
+我建议你**不要做太多敏感性分析**。对 TR Part C 来说，最有说服力的不是“参数很多”，而是每一组都能回答一个清晰的审稿问题。你现在的论文主结论是：DRPO 的优势来自“meeting-point recommendation + cost prediction + pricing optimization”，其中 SPO/SPO+ 的作用是让预测结果服务于下游定价，而不是只追求预测精度。所以敏感性分析应该围绕这个逻辑展开。
+
+我建议正文里做 **3组核心敏感性分析**，最多 **4组**。其中至少有 **2组必须直接围绕 SPO**，否则审稿人会觉得你只是做了普通行为参数敏感性，而没有证明 SPO 方法本身支持结论。
+
+---
+
+## 我最推荐的组合：3组主分析 + 1组可选附录分析
+
+### 第一组：SPO+ 权重敏感性，也就是 `α_SPO+` 敏感性
+
+这是最应该做的一组。因为你想让 SPO 方法正向支持论文结论，那么最直接的问题就是：
+
+**当 SPO+ 在训练损失中的权重增加时，DRPO 的下游运营表现是否变好？**
+
+你现在方法部分已经写了 blended loss：
+
+[
+\mathcal{L}(\theta)=\alpha_{SPO+}\ell_{SPO+}+(1-\alpha_{SPO+})\mathcal{L}_{Huber}
+]
+
+并说明 warm-up 后逐渐增加 SPO+ 权重。但结果部分目前还没有充分证明这个设计为什么必要。审稿人可能会问：为什么不用 Huber？为什么一定要 SPO+？所以这一组最有必要。
+
+我建议设定：
+
+[
+\alpha_{SPO+} \in {0, 0.1, 0.3, 0.5, 0.7, 1.0}
+]
+
+其中：
+
+* `α = 0`：纯 Huber，代表普通预测训练；
+* `α = 0.3 或 0.5`：混合训练，应该是你希望最优的区域；
+* `α = 1.0`：纯 SPO+，可能不一定最好，因为缺少点预测稳定性。
+
+最理想的结果形态是：
+
+|  α_SPO+ | Prediction MAE | SPO regret | Net profit | Total cost | Quit rate |
+| ------: | -------------: | ---------: | ---------: | ---------: | --------: |
+|       0 |             较低 |         较高 |         较低 |         较高 |        正常 |
+| 0.1–0.3 |             略变 |         下降 |         上升 |         下降 |        稳定 |
+|     0.5 |        最优或接近最优 |         较低 |         最高 |         较低 |       可接受 |
+|     1.0 |          MAE变差 |      不一定最低 |       可能下降 |       可能波动 |      可能波动 |
+
+这组结果最能支撑一句核心结论：
+
+> Decision-focused training improves downstream pricing quality beyond pointwise prediction accuracy.
+
+这比单纯说“DRPO 比 DSPO 好”更有说服力。因为它证明了 SPO+ 不是装饰，而是对下游定价结果有贡献。
+
+**这组我认为必须放正文。**
+
+---
+
+### 第二组：预测误差敏感性，也就是 cost prediction perturbation analysis
+
+这一组也非常适合正向支持 SPO。它回答的问题是：
+
+**当预测成本存在误差时，SPO-trained model 是否比 Huber-trained model 或 DSPO 更稳健？**
+
+你论文的定价模块依赖预测的边际成本 (\hat c_{tk})，而真实成本 (c_{tk}) 在线不可见。所以审稿人会自然关心：如果预测错了，价格会不会失效？SPO 的价值正好可以在这里体现出来。
+
+做法不复杂。你可以在 RC 测试集上，对预测成本加入不同程度扰动：
+
+[
+\tilde c_{tk} = \hat c_{tk}(1+\epsilon)
+]
+
+或者：
+
+[
+\tilde c_{tk} = \hat c_{tk} + \epsilon \cdot \sigma_c
+]
+
+其中：
+
+[
+\epsilon \in {-20%, -10%, 0, 10%, 20%}
+]
+
+也可以用随机噪声：
+
+[
+\epsilon \sim N(0,\sigma^2), \quad \sigma \in {0, 0.05, 0.10, 0.20, 0.30}
+]
+
+我更建议第一版用**随机噪声水平**，因为它更像真实预测误差；第二版用系统性偏差作为附录即可。
+
+比较对象建议至少包括：
+
+1. **Huber-only DRPO**
+2. **SPO+ DRPO**
+3. **DSPO**
+4. **Static-pricing**
+
+观察指标：
+
+* net profit degradation；
+* total cost increase；
+* quit rate change；
+* SPO regret；
+* home-pickup share。
+
+你希望看到的结论是：
+
+> 随着预测噪声增加，所有学习型方法表现都会下降，但 SPO+ DRPO 的净收益下降更慢，SPO regret 更低，弃乘率更稳定。
+
+这个结果非常适合 TR Part C，因为它说明你的方法不是只在理想预测条件下有效，而是在预测不确定性存在时仍然有决策稳健性。
+
+**这组也建议放正文。**
+
+---
+
+### 第三组：价格敏感度 `β_price` 敏感性
+
+这一组你现在已经有类似内容，而且它对结论支持很强。它回答的是：
+
+**DRPO 的动态价格引导机制在什么乘客行为条件下最有效？**
+
+你现在论文已经说明：价格项进入效用函数为 (-\beta^{price}a_{tk})，所以 (\beta^{price}) 越大，乘客越容易被折扣和加价引导。这和你的动态定价逻辑完全一致。
+
+建议在 RC 数据集中保留这一组，但需要稍微调整写法。不要只说“价格敏感度越高，利润越高、成本越低”。更好的表达是：
+
+> Higher price sensitivity enlarges the feasible behavioral response space for dynamic pricing. Under these conditions, the SPO-trained DRPO better converts marginal-cost predictions into effective price adjustments.
+
+也就是说，这组不是单纯的行为参数分析，而是解释 **SPO 定价机制何时最有价值**。
+
+建议参数水平：
+
+[
+\beta^{price} \in {0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40}
+]
+
+比较对象最好不要只放 DRPO。建议至少放：
+
+* Static-pricing；
+* DSPO；
+* DRPO-Huber；
+* DRPO-SPO+。
+
+这样可以看到：在低价格敏感度时，所有定价方法差距可能不大；但在中高价格敏感度时，SPO+ DRPO 的优势扩大。这种图很有说服力。
+
+**这组建议放正文。**
+
+---
+
+## 第四组：可选，但我建议放附录或补充材料
+
+### 外部选项效用 `V0` 敏感性
+
+这组你现在论文已经有，而且对解释弃乘率有帮助。但从“正向支持 SPO”这个目标来看，它不是最强的。因为 (V_0) 主要解释的是乘客是否退出 DRT 系统，而不是 SPO 是否提升下游定价质量。
+
+这组的优点是：可以支撑你论文里关于“不能只看低成本，还要看弃乘率”的结论。你现在结果中也已经强调，高外部选项吸引力下，成本下降可能来自需求流失，而不是运营效率提升。
+
+我建议保留，但不要作为最核心的 SPO 证据。它适合放在正文最后一小节，或者放附录。
+
+建议参数水平：
+
+[
+V_0 \in {-2.0, -1.5, -1.0, -0.5, 0, 0.5, 1.0}
+]
+
+重点不要写成“DRPO 总是最好”。在 (V_0) 很高时，所有方法都可能因为弃乘率过高而表现不稳定。这里要写成：
+
+> The advantage of DRPO should be interpreted jointly with passenger retention. When outside options become too attractive, low operating cost may reflect demand loss rather than routing efficiency.
+
+这句话很适合 TR Part C 的审稿风格，比较稳健，不夸大。
+
+---
+
+## 我不太建议正文继续做 `ASC_home`
+
+你现在已经做了 `ASC_home`，但如果目标是“用 SPO 支持论文结论”，它的优先级低于 `α_SPO+` 和预测误差敏感性。
+
+`ASC_home` 主要说明乘客天然偏好 home pickup 时，meeting-point steering 更难。这是合理的，但它对 SPO 的机制支持比较间接。更重要的是，`ASC_home` 的解释容易出现尴尬：如果 home-pickup preference 越弱，乘客反而 quit rate 增加，审稿人可能会追问行为设定是否合理。你现在论文里也有这个现象。所以我建议：
+
+* 正文不要重点放 `ASC_home`；
+* 可以放附录；
+* 或者和 `β_walk` 合并成 “walking acceptance sensitivity”。
+
+如果一定要保留，建议换一种表述，不要强调“home preference 越弱越好”，而是强调：
+
+> DRPO remains effective across different degrees of intrinsic home-pickup preference, but passenger retention must be monitored when steering becomes more aggressive.
+
+---
+
+## 我也不建议正文做太多运营参数，比如车队规模、车辆容量、到达率
+
+这些参数当然有意义，但它们不直接服务于你现在的目标。TR Part C 审稿人可能会喜欢 robustness，但你现在论文的弱点不是“运营场景不够多”，而是：
+
+1. SPO+ 的贡献还没有被单独展示；
+2. DRPO 和 DSPO 的差异目前更像整体框架差异，而不是清晰的 decision-focused learning 证据；
+3. 你需要证明“预测准确”不等于“定价好”。
+
+所以车队规模、容量、需求强度这些可以以后做，但不建议放在主敏感性分析里。它们容易分散论文重点。
+
+---
+
+## 最合适的数量
+
+我的建议是：
+
+### 正文做 3 组
+
+1. **SPO+ weight sensitivity：(\alpha_{SPO+})**
+   证明 blended SPO+ training 的必要性。
+
+2. **Prediction-error / cost-perturbation sensitivity**
+   证明 SPO-trained predictor 对下游定价更稳健。
+
+3. **Price-sensitivity sensitivity：(\beta^{price})**
+   证明 DRPO 的动态价格引导机制在行为响应下有效。
+
+### 附录或补充材料放 1 组
+
+4. **Outside-option utility：(V_0)**
+   说明成本、利润和弃乘率需要联合解释，避免审稿人质疑只看运营成本。
+
+这样一共 **3+1** 最合适。正文 3 组已经足够有力，附录 1 组增加稳健性。不要做 6、7 组，那样会显得你在“扫参数”，而不是有理论目标地验证机制。
+
+---
+
+## 我认为最能正向支持论文结论的排序
+
+从强到弱排序是：
+
+| 优先级 | 敏感性分析                 | 是否建议正文       | 支持的核心结论                    |
+| --: | --------------------- | ------------ | -------------------------- |
+|   1 | (\alpha_{SPO+}) 权重敏感性 | 必须正文         | SPO+ 训练确实提升下游定价结果          |
+|   2 | 预测误差扰动敏感性             | 必须正文         | SPO+ 比普通预测训练更稳健            |
+|   3 | (\beta^{price}) 价格敏感性 | 建议正文         | 动态定价能有效引导 meeting-point 选择 |
+|   4 | (V_0) 外部选项效用          | 正文短写或附录      | 成本下降必须结合弃乘率解释              |
+|   5 | (ASC_{home})          | 附录即可         | meeting-point 接受度影响运营收益    |
+|   6 | (\beta^{walk})        | 可替代 ASC_home | 步行容忍度影响 meeting-point 策略   |
+|   7 | 车队规模/容量/需求强度          | 不优先          | 运营鲁棒性，但不直接证明 SPO           |
+
+---
+
+## 推荐你最终在论文中这样组织
+
+你可以把原来的 5.4 改成更聚焦的结构：
+
+### 5.4 Sensitivity and mechanism analysis on the RC dataset
+
+#### 5.4.1 Effect of SPO+ weight
+
+核心图：
+横轴 (\alpha_{SPO+})，纵轴分别为 net profit、total cost、SPO regret、prediction MAE。
+
+这张图说明：最优运营结果不一定出现在 MAE 最低处，而是出现在 SPO regret 更低处。
+
+#### 5.4.2 Robustness to marginal-cost prediction errors
+
+核心图：
+横轴 prediction noise level，纵轴为 net profit degradation 或 regret increase。
+比较 Huber-only、SPO+、DSPO。
+
+这张图说明：SPO+ 对下游决策质量更稳健。
+
+#### 5.4.3 Effect of passenger price sensitivity
+
+核心图：
+横轴 (\beta^{price})，纵轴为 net profit、total cost、quit rate。
+比较 Static、DSPO、DRPO-Huber、DRPO-SPO+。
+
+这张图说明：当乘客对价格有响应时，DRPO 能更有效地把成本预测转化为价格引导。
+
+#### 5.4.4 Outside-option attractiveness
+
+这节可以短一点，或者放附录。重点是说明：当外部选项太强，低成本不代表好系统，需要看 quit rate。
+
+---
+
+## 结论部分可以强化成这样
+
+你希望结论支持 SPO，可以写成：
+
+> The RC sensitivity analysis further confirms the decision-focused role of SPO+ training. Varying the SPO+ weight shows that the best operational performance is obtained when prediction accuracy is combined with downstream pricing alignment, rather than when the model is trained only for pointwise cost accuracy. Prediction-error perturbation experiments further show that the SPO-trained DRPO policy is less sensitive to marginal-cost prediction noise and maintains higher net profit under degraded prediction quality. These findings support the main argument that, in online many-to-one DRT pricing, the value of prediction should be evaluated through the pricing decisions it induces.
+
+中文意思是：
+RC敏感性分析进一步证明，SPO+ 的价值不只是提高预测精度，而是提高预测所诱导的定价决策质量。
+
+---
+
+我的建议很明确：**正文做 3 个，附录做 1 个**。最核心的不是 `β_price / V0 / ASC_home` 这类普通行为敏感性，而是把敏感性分析改成 **SPO机制分析 + 行为响应分析**。这样才最能正向支持你的论文结论。
