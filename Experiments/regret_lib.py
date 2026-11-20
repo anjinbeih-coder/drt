@@ -26,6 +26,8 @@ def make_bare_oracle_agent(min_p=-10.0, max_p=10.0, base_util=0.0, revenue=50.0,
     agent.max_p = float(max_p)
     agent.base_util = float(base_util)
     agent.revenue = float(revenue)
+    agent.beta_ivt = 0.0
+    agent.spo_w0_band = False
     agent.config = _BareConfig(float(outside_option_util))
     return agent
 

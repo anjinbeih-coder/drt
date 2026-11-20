@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from Src.Algorithms.DSPO import DSPO
 from Src.Algorithms.DSPO_plus_SPO import DSPO_plus_SPO
 from Environments.OOH.containers import Location, ParcelPoint, Customer
+from Experiments.regret_lib import make_bare_oracle_agent
 
 def stub_common(obj, outside_util):
     obj.initial_phase = False
@@ -41,6 +42,11 @@ def parent_prices(outside_util):
 def child_prices(outside_util):
     obj = DSPO_plus_SPO.__new__(DSPO_plus_SPO)
     stub_common(obj, outside_util)
+    obj.get_prediction_with_q = lambda feat, home, pps: (
+        obj.get_prediction(feat, home, pps), [0.0] * (len(pps) + 2))
+    obj.beta_ivt = 0.0
+    obj.vehicle_speed = 1.0
+    obj.spo_w0_band = False
     obj.spo_enabled = True
     obj.l0_home = 0.0
     obj.l_mp = 0.0
@@ -62,8 +68,7 @@ def main():
     assert np.all(shift > 0.1), "prices must drop when outside option strengthens"
 
     # oracle:价格不动点除法 + 概率 softmax 保留外部项(P 之和 < 1)
-    obj = DSPO_plus_SPO.__new__(DSPO_plus_SPO)
-    stub_common(obj, 0.0)
+    obj = make_bare_oracle_agent(min_p=-1e9, max_p=1e9, outside_option_util=0.0)
     costs = torch.tensor([7.0, 3.0], dtype=torch.float64)
     cust_info = {'base_util': 0.0, 'home_util': 3.2, 'incentive_sensitivity': -0.25, 'revenue': 50.0}
     out0 = DSPO_plus_SPO._pricing_oracle_lifted_torch(obj, costs, cust_info, [{'util': 0.0}])
